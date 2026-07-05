@@ -21,6 +21,7 @@ type probeEvent struct {
 	Uid         uint32
 	Comm        [16]uint8
 	Filename    [256]uint8
+	Cgroup      [128]uint8
 	_           [4]byte
 }
 
@@ -30,6 +31,7 @@ type probeEvent struct {
 const (
 	probeMapEvents      = "events"
 	probeProgHandleExec = "handle_exec"
+	probeVarCgroupMode  = "cgroup_mode"
 	probeVarUnused      = "unused"
 )
 
@@ -89,7 +91,8 @@ type probeMapSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type probeVariableSpecs struct {
-	Unused *ebpf.VariableSpec `ebpf:"unused"`
+	CgroupMode *ebpf.VariableSpec `ebpf:"cgroup_mode"`
+	Unused     *ebpf.VariableSpec `ebpf:"unused"`
 }
 
 // probeObjects contains all objects after they have been loaded into the kernel.
@@ -125,7 +128,8 @@ func (m *probeMaps) Close() error {
 //
 // It can be passed to loadProbeObjects or ebpf.CollectionSpec.LoadAndAssign.
 type probeVariables struct {
-	Unused *ebpf.Variable `ebpf:"unused"`
+	CgroupMode *ebpf.Variable `ebpf:"cgroup_mode"`
+	Unused     *ebpf.Variable `ebpf:"unused"`
 }
 
 // probePrograms contains all programs after they have been loaded into the kernel.
