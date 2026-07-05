@@ -22,7 +22,7 @@ struct event {
 	__u32 pid;
 	__u32 ppid;
 	__u32 uid;
-	__u32 type;
+	__u8  type;
 	__u8  comm[TASK_COMM_LEN];
 	__u8  filename[MAX_FILENAME_LEN];
 	__u8  cgroup[CGROUP_NAME_LEN];
@@ -53,7 +53,7 @@ static __always_inline const char *read_cgroup_name(struct task_struct *task)
 }
 
 // fill_common populates the fields shared by every event type.
-static __always_inline void fill_common(struct event *e, __u32 type)
+static __always_inline void fill_common(struct event *e, __u8 type)
 {
 	e->type = type;
 	e->timestamp_ns = bpf_ktime_get_ns();
