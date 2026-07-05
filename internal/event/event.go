@@ -20,4 +20,5 @@ type Event struct {
 	UID         uint32
 	Comm        string
 	Filename    string
+	Cgroup      string
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/fevzisahinler/probe/internal/cgroup"
 	"github.com/fevzisahinler/probe/internal/enrich"
 	"github.com/fevzisahinler/probe/internal/loader"
 	"github.com/fevzisahinler/probe/internal/rules"
@@ -22,7 +23,13 @@ var version = "dev"
 func main() {
 	log.SetFlags(log.Ltime)
 
-	l, err := loader.New()
+	mode, err := cgroup.Detect()
+	if err != nil {
+		log.Printf("cgroup detect failed, defaulting to v2: %v", err)
+		mode = cgroup.ModeV2
+	}
+
+	l, err := loader.New(mode)
 	if err != nil {
 		log.Fatalf("startup: %v", err)
 	}
@@ -30,7 +37,7 @@ func main() {
 
 	defaultRules := rules.Default()
 	engine := rules.NewEngine(defaultRules)
-	log.Printf("probe %s — %d rule(s), watching", version, len(defaultRules))
+	log.Printf("probe %s — cgroup %s, %d rule(s), watching", version, mode, len(defaultRules))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -52,11 +59,7 @@ func main() {
 			continue
 		}
 
-		// A process can exit before we read its cgroup; treat unknown workload
-		// as host for now. Phase 3 reads the cgroup id in eBPF to close this
-		// race, and phase 4 counts the failures as a metric.
-		info, _ := enrich.Enrich(ev.PID)
-
+		info := enrich.FromCgroup(ev.Cgroup)
 		for _, m := range engine.Eval(ev, info) {
 			fmt.Printf("[%s] %-20s %-24s pid=%-7d comm=%-12s %s\n",
 				m.Rule.Priority, m.Rule.Name, info.Source(), ev.PID, ev.Comm, ev.Filename)
