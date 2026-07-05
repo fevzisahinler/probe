@@ -11,6 +11,9 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define CGROUP_MODE_V1 1
 #define CGROUP_MODE_V2 2
 
+#define EVENT_EXEC 1
+#define EVENT_OPEN 2
+
 // Set by userspace at load time: 1 = cgroup v1, 2 = cgroup v2.
 const volatile __u32 cgroup_mode = 0;
 
@@ -19,6 +22,7 @@ struct event {
 	__u32 pid;
 	__u32 ppid;
 	__u32 uid;
+	__u32 type;
 	__u8  comm[TASK_COMM_LEN];
 	__u8  filename[MAX_FILENAME_LEN];
 	__u8  cgroup[CGROUP_NAME_LEN];
@@ -48,13 +52,10 @@ static __always_inline const char *read_cgroup_name(struct task_struct *task)
 	return BPF_CORE_READ(cgroups, dfl_cgrp, kn, name);
 }
 
-SEC("tracepoint/sched/sched_process_exec")
-int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+// fill_common populates the fields shared by every event type.
+static __always_inline void fill_common(struct event *e, __u32 type)
 {
-	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-	if (!e)
-		return 0;
-
+	e->type = type;
 	e->timestamp_ns = bpf_ktime_get_ns();
 	e->pid = bpf_get_current_pid_tgid() >> 32;
 	e->uid = bpf_get_current_uid_gid();
@@ -62,14 +63,39 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
 	e->ppid = BPF_CORE_READ(task, real_parent, tgid);
 
-	const char *cgroup_name = read_cgroup_name(task);
-	bpf_probe_read_kernel_str(&e->cgroup, sizeof(e->cgroup), cgroup_name);
-
+	bpf_probe_read_kernel_str(&e->cgroup, sizeof(e->cgroup), read_cgroup_name(task));
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));
+}
+
+SEC("tracepoint/sched/sched_process_exec")
+int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
+{
+	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e)
+		return 0;
+
+	fill_common(e, EVENT_EXEC);
 
 	// Low 16 bits of __data_loc_filename hold the path's offset into the record.
 	unsigned int off = ctx->__data_loc_filename & 0xFFFF;
 	bpf_probe_read_kernel_str(&e->filename, sizeof(e->filename), (char *)ctx + off);
+
+	bpf_ringbuf_submit(e, 0);
+	return 0;
+}
+
+SEC("tracepoint/syscalls/sys_enter_openat")
+int handle_openat(struct trace_event_raw_sys_enter *ctx)
+{
+	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e)
+		return 0;
+
+	fill_common(e, EVENT_OPEN);
+
+	// openat(dfd, filename, flags, mode): args[1] is the userspace path.
+	const char *filename = (const char *)ctx->args[1];
+	bpf_probe_read_user_str(&e->filename, sizeof(e->filename), filename);
 
 	bpf_ringbuf_submit(e, 0);
 	return 0;

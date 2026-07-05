@@ -7,6 +7,8 @@ type Type uint8
 const (
 	// Exec is a process-execution (execve) event.
 	Exec Type = iota + 1
+	// Open is a file-open (openat) event.
+	Open
 )
 
 // String returns the event type's short label.
@@ -14,6 +16,8 @@ func (t Type) String() string {
 	switch t {
 	case Exec:
 		return "EXEC"
+	case Open:
+		return "OPEN"
 	default:
 		return "UNKNOWN"
 	}

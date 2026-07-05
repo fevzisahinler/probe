@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
@@ -15,17 +16,17 @@ import (
 	"github.com/fevzisahinler/probe/internal/event"
 )
 
-// Loader attaches the exec tracepoint and reads events from its ring buffer.
+// Loader attaches probe's tracepoints and reads events from the ring buffer.
 // Read must not be called concurrently.
 type Loader struct {
 	objs      probeObjects
-	link      link.Link
+	links     []link.Link
 	reader    *ringbuf.Reader
 	closeOnce sync.Once
 }
 
-// New loads the eBPF objects for the given cgroup mode, attaches the tracepoint,
-// and opens the ring buffer. The caller must Close the result.
+// New loads the eBPF objects for the given cgroup mode, attaches every
+// tracepoint, and opens the ring buffer. The caller must Close the result.
 func New(mode cgroup.Mode) (*Loader, error) {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return nil, fmt.Errorf("remove memlock: %w", err)
@@ -44,25 +45,35 @@ func New(mode cgroup.Mode) (*Loader, error) {
 		return nil, fmt.Errorf("set cgroup_mode: %w", err)
 	}
 
-	var objs probeObjects
-	if err := spec.LoadAndAssign(&objs, nil); err != nil {
+	l := &Loader{}
+	if err := spec.LoadAndAssign(&l.objs, nil); err != nil {
 		return nil, fmt.Errorf("load bpf objects: %w", err)
 	}
 
-	tp, err := link.Tracepoint("sched", "sched_process_exec", objs.HandleExec, nil)
-	if err != nil {
-		_ = objs.Close()
-		return nil, fmt.Errorf("attach tracepoint sched_process_exec: %w", err)
+	hooks := []struct {
+		group, name string
+		prog        *ebpf.Program
+	}{
+		{"sched", "sched_process_exec", l.objs.HandleExec},
+		{"syscalls", "sys_enter_openat", l.objs.HandleOpenat},
+	}
+	for _, h := range hooks {
+		lnk, err := link.Tracepoint(h.group, h.name, h.prog, nil)
+		if err != nil {
+			_ = l.Close()
+			return nil, fmt.Errorf("attach %s/%s: %w", h.group, h.name, err)
+		}
+		l.links = append(l.links, lnk)
 	}
 
-	reader, err := ringbuf.NewReader(objs.Events)
+	reader, err := ringbuf.NewReader(l.objs.Events)
 	if err != nil {
-		_ = tp.Close()
-		_ = objs.Close()
+		_ = l.Close()
 		return nil, fmt.Errorf("open ring buffer: %w", err)
 	}
+	l.reader = reader
 
-	return &Loader{objs: objs, link: tp, reader: reader}, nil
+	return l, nil
 }
 
 // Read blocks until the next event arrives. It returns ringbuf.ErrClosed
@@ -79,7 +90,7 @@ func (l *Loader) Read() (event.Event, error) {
 	}
 
 	return event.Event{
-		Type:        event.Exec,
+		Type:        event.Type(raw.Type),
 		TimestampNs: raw.TimestampNs,
 		PID:         raw.Pid,
 		PPID:        raw.Ppid,
@@ -90,17 +101,19 @@ func (l *Loader) Read() (event.Event, error) {
 	}, nil
 }
 
-// Close releases the reader, link, and objects, joining any errors.
+// Close detaches the tracepoints and releases all resources, joining any errors.
 func (l *Loader) Close() error {
-	var err error
+	var errs []error
 	l.closeOnce.Do(func() {
-		err = errors.Join(
-			l.reader.Close(),
-			l.link.Close(),
-			l.objs.Close(),
-		)
+		if l.reader != nil {
+			errs = append(errs, l.reader.Close())
+		}
+		for _, lnk := range l.links {
+			errs = append(errs, lnk.Close())
+		}
+		errs = append(errs, l.objs.Close())
 	})
-	return err
+	return errors.Join(errs...)
 }
 
 func cString(b []byte) string {
