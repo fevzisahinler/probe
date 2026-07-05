@@ -27,8 +27,9 @@ func main() {
 	}
 	defer l.Close()
 
-	engine := rules.NewEngine(rules.Default())
-	log.Printf("probe %s — %d rule(s), watching", version, len(rules.Default()))
+	defaultRules := rules.Default()
+	engine := rules.NewEngine(defaultRules)
+	log.Printf("probe %s — %d rule(s), watching", version, len(defaultRules))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -47,7 +48,12 @@ func main() {
 			log.Printf("read: %v", err)
 			continue
 		}
-		info := enrich.Enrich(ev.PID)
+
+		// A process can exit before we read its cgroup; treat unknown workload
+		// as host for now. Phase 3 reads the cgroup id in eBPF to close this
+		// race, and phase 4 counts the failures as a metric.
+		info, _ := enrich.Enrich(ev.PID)
+
 		for _, m := range engine.Eval(ev, info) {
 			fmt.Printf("[%s] %-20s %-24s pid=%-7d comm=%-12s %s\n",
 				m.Rule.Priority, m.Rule.Name, info.Source(), ev.PID, ev.Comm, ev.Filename)

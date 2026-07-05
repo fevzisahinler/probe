@@ -5,7 +5,9 @@ package event
 type Type uint8
 
 const (
-	Exec Type = iota + 1
+	// TypeAny is the zero value; rule conditions use it to match any type.
+	TypeAny Type = iota
+	Exec
 )
 
 // Event is a decoded kernel event.

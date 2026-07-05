@@ -35,7 +35,8 @@ func TestInfoSource(t *testing.T) {
 		info Info
 		want string
 	}{
-		{"container", Info{ContainerID: id1}, "container:" + id1[:12]},
+		{"full container id truncated", Info{ContainerID: id1}, "container:" + id1[:shortIDLen]},
+		{"short container id kept whole", Info{ContainerID: "abc"}, "container:abc"},
 		{"service", Info{Service: "nginx.service"}, "service:nginx.service"},
 		{"host", Info{}, "host"},
 	}

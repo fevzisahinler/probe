@@ -17,27 +17,37 @@ const (
 	Medium   Priority = "MEDIUM"
 )
 
+// Workload constrains a rule to processes running in a given context.
+type Workload string
+
+const (
+	WorkloadAny       Workload = ""
+	WorkloadContainer Workload = "container"
+	WorkloadHost      Workload = "host"
+)
+
 // Condition is the data-driven predicate of a rule.
 type Condition struct {
 	Type     event.Type
 	CommIn   []string
-	Workload string // "container", "host", or "" for any
+	Workload Workload
 }
 
 func (c Condition) matches(ev event.Event, info enrich.Info) bool {
-	if c.Type != 0 && ev.Type != c.Type {
+	if c.Type != event.TypeAny && ev.Type != c.Type {
 		return false
 	}
 	if len(c.CommIn) > 0 && !slices.Contains(c.CommIn, ev.Comm) {
 		return false
 	}
 	switch c.Workload {
-	case "container":
+	case WorkloadContainer:
 		return info.InContainer()
-	case "host":
+	case WorkloadHost:
 		return !info.InContainer()
+	default:
+		return true
 	}
-	return true
 }
 
 // Rule is a single named detection.
@@ -67,7 +77,7 @@ func NewEngine(rules []Rule) *Engine {
 
 // Eval returns every rule that matches the event.
 func (e *Engine) Eval(ev event.Event, info enrich.Info) []Match {
-	var matches []Match
+	matches := make([]Match, 0, len(e.rules))
 	for _, r := range e.rules {
 		if r.Condition.matches(ev, info) {
 			matches = append(matches, Match{Rule: r, Event: ev, Info: info})
@@ -86,7 +96,7 @@ func Default() []Rule {
 			Condition: Condition{
 				Type:     event.Exec,
 				CommIn:   []string{"sh", "bash", "zsh", "ash", "dash", "ksh"},
-				Workload: "container",
+				Workload: WorkloadContainer,
 			},
 		},
 	}

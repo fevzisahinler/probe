@@ -7,6 +7,9 @@ import (
 	"regexp"
 )
 
+// shortIDLen is how many container-ID characters Source displays.
+const shortIDLen = 12
+
 // Info identifies the workload a process belongs to.
 type Info struct {
 	ContainerID string
@@ -20,7 +23,11 @@ func (i Info) InContainer() bool { return i.ContainerID != "" }
 func (i Info) Source() string {
 	switch {
 	case i.ContainerID != "":
-		return "container:" + i.ContainerID[:12]
+		id := i.ContainerID
+		if len(id) > shortIDLen {
+			id = id[:shortIDLen]
+		}
+		return "container:" + id
 	case i.Service != "":
 		return "service:" + i.Service
 	default:
@@ -35,14 +42,16 @@ var (
 	serviceRe     = regexp.MustCompile(`[0-9A-Za-z_.@\-]+\.service`)
 )
 
-// Enrich reads the cgroup of pid and returns its workload info. A process with
-// no readable cgroup yields a zero Info.
-func Enrich(pid uint32) Info {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cgroup", pid))
+// Enrich reads the cgroup of pid and returns its workload info. It returns an
+// error when the cgroup cannot be read (e.g. the process already exited) so the
+// caller can distinguish that from a confirmed host process.
+func Enrich(pid uint32) (Info, error) {
+	path := fmt.Sprintf("/proc/%d/cgroup", pid)
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return Info{}
+		return Info{}, fmt.Errorf("read %s: %w", path, err)
 	}
-	return parseCgroup(string(data))
+	return parseCgroup(string(data)), nil
 }
 
 func parseCgroup(cgroup string) Info {
