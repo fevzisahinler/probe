@@ -9,17 +9,9 @@ import (
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
-)
 
-// Event is a decoded process-execution event.
-type Event struct {
-	TimestampNs uint64
-	PID         uint32
-	PPID        uint32
-	UID         uint32
-	Comm        string
-	Filename    string
-}
+	"github.com/fevzisahinler/probe/internal/event"
+)
 
 // Loader attaches the exec tracepoint and reads events from its ring buffer.
 // Read must not be called concurrently.
@@ -60,18 +52,19 @@ func New() (*Loader, error) {
 
 // Read blocks until the next event arrives. It returns ringbuf.ErrClosed
 // after Close.
-func (l *Loader) Read() (Event, error) {
+func (l *Loader) Read() (event.Event, error) {
 	record, err := l.reader.Read()
 	if err != nil {
-		return Event{}, err
+		return event.Event{}, err
 	}
 
 	var raw probeEvent
 	if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &raw); err != nil {
-		return Event{}, fmt.Errorf("decode event: %w", err)
+		return event.Event{}, fmt.Errorf("decode event: %w", err)
 	}
 
-	return Event{
+	return event.Event{
+		Type:        event.Exec,
 		TimestampNs: raw.TimestampNs,
 		PID:         raw.Pid,
 		PPID:        raw.Ppid,

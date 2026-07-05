@@ -13,19 +13,22 @@ import (
 
 	"github.com/fevzisahinler/probe/internal/enrich"
 	"github.com/fevzisahinler/probe/internal/loader"
+	"github.com/fevzisahinler/probe/internal/rules"
 )
 
 var version = "dev"
 
 func main() {
 	log.SetFlags(log.Ltime)
-	log.Printf("probe %s — watching process execution", version)
 
 	l, err := loader.New()
 	if err != nil {
 		log.Fatalf("startup: %v", err)
 	}
 	defer l.Close()
+
+	engine := rules.NewEngine(rules.Default())
+	log.Printf("probe %s — %d rule(s), watching", version, len(rules.Default()))
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -45,7 +48,9 @@ func main() {
 			continue
 		}
 		info := enrich.Enrich(ev.PID)
-		fmt.Printf("EXEC %-24s uid=%-5d pid=%-7d comm=%-16s %s\n",
-			info.Source(), ev.UID, ev.PID, ev.Comm, ev.Filename)
+		for _, m := range engine.Eval(ev, info) {
+			fmt.Printf("[%s] %-20s %-24s pid=%-7d comm=%-12s %s\n",
+				m.Rule.Priority, m.Rule.Name, info.Source(), ev.PID, ev.Comm, ev.Filename)
+		}
 	}
 }
