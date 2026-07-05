@@ -1,0 +1,23 @@
+# golangci-lint v2 config — https://golangci-lint.run
+# (run `golangci-lint migrate` if you are on v1)
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard   # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - gosec
+    - misspell
+    - prealloc
+    - revive
+    - unconvert
+    - unparam
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
