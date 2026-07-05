@@ -11,6 +11,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 
+	"github.com/fevzisahinler/probe/internal/cgroup"
 	"github.com/fevzisahinler/probe/internal/event"
 )
 
@@ -23,15 +24,28 @@ type Loader struct {
 	closeOnce sync.Once
 }
 
-// New loads the eBPF objects, attaches the tracepoint, and opens the ring
-// buffer. The caller must Close the result.
-func New() (*Loader, error) {
+// New loads the eBPF objects for the given cgroup mode, attaches the tracepoint,
+// and opens the ring buffer. The caller must Close the result.
+func New(mode cgroup.Mode) (*Loader, error) {
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return nil, fmt.Errorf("remove memlock: %w", err)
 	}
 
+	spec, err := loadProbe()
+	if err != nil {
+		return nil, fmt.Errorf("load bpf spec: %w", err)
+	}
+
+	v := spec.Variables["cgroup_mode"]
+	if v == nil {
+		return nil, errors.New("bpf variable cgroup_mode not found")
+	}
+	if err := v.Set(uint32(mode)); err != nil {
+		return nil, fmt.Errorf("set cgroup_mode: %w", err)
+	}
+
 	var objs probeObjects
-	if err := loadProbeObjects(&objs, nil); err != nil {
+	if err := spec.LoadAndAssign(&objs, nil); err != nil {
 		return nil, fmt.Errorf("load bpf objects: %w", err)
 	}
 
@@ -72,6 +86,7 @@ func (l *Loader) Read() (event.Event, error) {
 		UID:         raw.Uid,
 		Comm:        cString(raw.Comm[:]),
 		Filename:    cString(raw.Filename[:]),
+		Cgroup:      cString(raw.Cgroup[:]),
 	}, nil
 }
 
