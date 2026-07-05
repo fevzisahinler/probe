@@ -15,7 +15,6 @@ import (
 	"github.com/fevzisahinler/probe/internal/cgroup"
 	"github.com/fevzisahinler/probe/internal/enrich"
 	"github.com/fevzisahinler/probe/internal/loader"
-	"github.com/fevzisahinler/probe/internal/rules"
 )
 
 var version = "dev"
@@ -35,9 +34,7 @@ func main() {
 	}
 	defer func() { _ = l.Close() }()
 
-	defaultRules := rules.Default()
-	engine := rules.NewEngine(defaultRules)
-	log.Printf("probe %s — cgroup %s, %d rule(s), watching", version, mode, len(defaultRules))
+	log.Printf("probe %s — cgroup %s, streaming events", version, mode)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -60,9 +57,7 @@ func main() {
 		}
 
 		info := enrich.FromCgroup(ev.Cgroup)
-		for _, m := range engine.Eval(ev, info) {
-			fmt.Printf("[%s] %-20s %-24s pid=%-7d comm=%-12s %s\n",
-				m.Rule.Priority, m.Rule.Name, info.Source(), ev.PID, ev.Comm, ev.Filename)
-		}
+		fmt.Printf("%-6s %-24s uid=%-5d pid=%-7d comm=%-12s %s\n",
+			ev.Type, info.Source(), ev.UID, ev.PID, ev.Comm, ev.Filename)
 	}
 }

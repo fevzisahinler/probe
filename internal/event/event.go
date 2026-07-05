@@ -5,11 +5,19 @@ package event
 type Type uint8
 
 const (
-	// TypeAny is the zero value; rule conditions use it to match any type.
-	TypeAny Type = iota
 	// Exec is a process-execution (execve) event.
-	Exec
+	Exec Type = iota + 1
 )
+
+// String returns the event type's short label.
+func (t Type) String() string {
+	switch t {
+	case Exec:
+		return "EXEC"
+	default:
+		return "UNKNOWN"
+	}
+}
 
 // Event is a decoded kernel event.
 type Event struct {
