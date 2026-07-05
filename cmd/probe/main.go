@@ -11,6 +11,7 @@ import (
 
 	"github.com/cilium/ebpf/ringbuf"
 
+	"github.com/fevzisahinler/probe/internal/enrich"
 	"github.com/fevzisahinler/probe/internal/loader"
 )
 
@@ -31,7 +32,7 @@ func main() {
 
 	go func() {
 		<-ctx.Done()
-		l.Close() // unblock Read
+		l.Close()
 	}()
 
 	for {
@@ -43,7 +44,8 @@ func main() {
 			log.Printf("read: %v", err)
 			continue
 		}
-		fmt.Printf("EXEC uid=%-5d pid=%-7d ppid=%-7d comm=%-16s %s\n",
-			ev.UID, ev.PID, ev.PPID, ev.Comm, ev.Filename)
+		info := enrich.Enrich(ev.PID)
+		fmt.Printf("EXEC %-24s uid=%-5d pid=%-7d comm=%-16s %s\n",
+			info.Source(), ev.UID, ev.PID, ev.Comm, ev.Filename)
 	}
 }
