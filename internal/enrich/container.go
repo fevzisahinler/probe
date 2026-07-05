@@ -47,7 +47,7 @@ var (
 // caller can distinguish that from a confirmed host process.
 func Enrich(pid uint32) (Info, error) {
 	path := fmt.Sprintf("/proc/%d/cgroup", pid)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is /proc/<numeric pid>/cgroup; no traversal
 	if err != nil {
 		return Info{}, fmt.Errorf("read %s: %w", path, err)
 	}

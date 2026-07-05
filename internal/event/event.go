@@ -7,6 +7,7 @@ type Type uint8
 const (
 	// TypeAny is the zero value; rule conditions use it to match any type.
 	TypeAny Type = iota
+	// Exec is a process-execution (execve) event.
 	Exec
 )
 

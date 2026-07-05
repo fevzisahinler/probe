@@ -1,3 +1,4 @@
+// Command probe is a Falco-style eBPF runtime security agent.
 package main
 
 import (
@@ -25,7 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("startup: %v", err)
 	}
-	defer l.Close()
+	defer func() { _ = l.Close() }()
 
 	defaultRules := rules.Default()
 	engine := rules.NewEngine(defaultRules)
@@ -36,7 +37,9 @@ func main() {
 
 	go func() {
 		<-ctx.Done()
-		l.Close()
+		if err := l.Close(); err != nil {
+			log.Printf("shutdown: %v", err)
+		}
 	}()
 
 	for {

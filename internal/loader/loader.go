@@ -3,6 +3,7 @@ package loader
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -36,14 +37,14 @@ func New() (*Loader, error) {
 
 	tp, err := link.Tracepoint("sched", "sched_process_exec", objs.HandleExec, nil)
 	if err != nil {
-		objs.Close()
+		_ = objs.Close()
 		return nil, fmt.Errorf("attach tracepoint sched_process_exec: %w", err)
 	}
 
 	reader, err := ringbuf.NewReader(objs.Events)
 	if err != nil {
-		tp.Close()
-		objs.Close()
+		_ = tp.Close()
+		_ = objs.Close()
 		return nil, fmt.Errorf("open ring buffer: %w", err)
 	}
 
@@ -74,13 +75,15 @@ func (l *Loader) Read() (event.Event, error) {
 	}, nil
 }
 
-// Close releases the reader, link, and objects.
+// Close releases the reader, link, and objects, joining any errors.
 func (l *Loader) Close() error {
 	var err error
 	l.closeOnce.Do(func() {
-		l.reader.Close()
-		l.link.Close()
-		err = l.objs.Close()
+		err = errors.Join(
+			l.reader.Close(),
+			l.link.Close(),
+			l.objs.Close(),
+		)
 	})
 	return err
 }
