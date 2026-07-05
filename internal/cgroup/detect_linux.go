@@ -16,5 +16,5 @@ func Detect() (Mode, error) {
 	if err := unix.Statfs(cgroupRoot, &st); err != nil {
 		return 0, fmt.Errorf("statfs %s: %w", cgroupRoot, err)
 	}
-	return modeFromMagic(int64(st.Type)), nil
+	return modeFromMagic(st.Type), nil
 }
