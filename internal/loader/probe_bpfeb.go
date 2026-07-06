@@ -20,11 +20,14 @@ type probeEvent struct {
 	Ppid        uint32
 	Uid         uint32
 	Mode        uint32
+	Dport       uint16
+	Family      uint16
 	Type        uint8
+	Daddr       [16]uint8
 	Comm        [16]uint8
 	Filename    [256]uint8
 	Cgroup      [128]uint8
-	_           [7]byte
+	_           [3]byte
 }
 
 // Names of all BPF objects in the ELF.
@@ -33,6 +36,7 @@ type probeEvent struct {
 const (
 	probeMapEvents           = "events"
 	probeProgHandleChmod     = "handle_chmod"
+	probeProgHandleConnect   = "handle_connect"
 	probeProgHandleExec      = "handle_exec"
 	probeProgHandleFchmodat  = "handle_fchmodat"
 	probeProgHandleFchmodat2 = "handle_fchmodat2"
@@ -86,6 +90,7 @@ type probeSpecs struct {
 // It can be passed ebpf.CollectionSpec.Assign.
 type probeProgramSpecs struct {
 	HandleChmod     *ebpf.ProgramSpec `ebpf:"handle_chmod"`
+	HandleConnect   *ebpf.ProgramSpec `ebpf:"handle_connect"`
 	HandleExec      *ebpf.ProgramSpec `ebpf:"handle_exec"`
 	HandleFchmodat  *ebpf.ProgramSpec `ebpf:"handle_fchmodat"`
 	HandleFchmodat2 *ebpf.ProgramSpec `ebpf:"handle_fchmodat2"`
@@ -151,6 +156,7 @@ type probeVariables struct {
 // It can be passed to loadProbeObjects or ebpf.CollectionSpec.LoadAndAssign.
 type probePrograms struct {
 	HandleChmod     *ebpf.Program `ebpf:"handle_chmod"`
+	HandleConnect   *ebpf.Program `ebpf:"handle_connect"`
 	HandleExec      *ebpf.Program `ebpf:"handle_exec"`
 	HandleFchmodat  *ebpf.Program `ebpf:"handle_fchmodat"`
 	HandleFchmodat2 *ebpf.Program `ebpf:"handle_fchmodat2"`
@@ -162,6 +168,7 @@ type probePrograms struct {
 func (p *probePrograms) Close() error {
 	return _ProbeClose(
 		p.HandleChmod,
+		p.HandleConnect,
 		p.HandleExec,
 		p.HandleFchmodat,
 		p.HandleFchmodat2,
