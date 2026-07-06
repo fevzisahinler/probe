@@ -12,6 +12,7 @@ import (
 // Priority ranks how serious a detection is.
 type Priority string
 
+// Priority levels, most severe first.
 const (
 	Critical Priority = "critical"
 	High     Priority = "high"
@@ -23,6 +24,7 @@ const (
 // Workload constrains a rule to a process context.
 type Workload string
 
+// Workload values a rule Condition can require.
 const (
 	WorkloadAny       Workload = ""
 	WorkloadContainer Workload = "container"
