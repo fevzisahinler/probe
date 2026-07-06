@@ -11,6 +11,8 @@ const (
 	Open
 	// Chmod is a permission-change (chmod/fchmodat) event.
 	Chmod
+	// Connect is an outbound network connection (connect) event.
+	Connect
 )
 
 // String returns the event type's short label.
@@ -22,6 +24,8 @@ func (t Type) String() string {
 		return "OPEN"
 	case Chmod:
 		return "CHMOD"
+	case Connect:
+		return "CONN"
 	default:
 		return "UNKNOWN"
 	}
@@ -35,7 +39,9 @@ type Event struct {
 	PPID        uint32
 	UID         uint32
 	Mode        uint32 // file mode for Chmod events, else 0
+	DestPort    uint16 // destination port for Connect events, else 0
 	Comm        string
 	Filename    string
 	Cgroup      string
+	DestIP      string // destination IP for Connect events, else ""
 }

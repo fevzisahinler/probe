@@ -1,6 +1,7 @@
 #include "vmlinux.h"
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
+#include <bpf/bpf_endian.h>
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
@@ -11,9 +12,13 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define CGROUP_MODE_V1 1
 #define CGROUP_MODE_V2 2
 
-#define EVENT_EXEC  1
-#define EVENT_OPEN  2
-#define EVENT_CHMOD 3
+#define EVENT_EXEC    1
+#define EVENT_OPEN    2
+#define EVENT_CHMOD   3
+#define EVENT_CONNECT 4
+
+#define AF_INET  2
+#define AF_INET6 10
 
 // Set by userspace at load time: 1 = cgroup v1, 2 = cgroup v2.
 const volatile __u32 cgroup_mode = 0;
@@ -24,7 +29,10 @@ struct event {
 	__u32 ppid;
 	__u32 uid;
 	__u32 mode;
+	__u16 dport;
+	__u16 family;
 	__u8  type;
+	__u8  daddr[16];
 	__u8  comm[TASK_COMM_LEN];
 	__u8  filename[MAX_FILENAME_LEN];
 	__u8  cgroup[CGROUP_NAME_LEN];
@@ -54,11 +62,17 @@ static __always_inline const char *read_cgroup_name(struct task_struct *task)
 	return BPF_CORE_READ(cgroups, dfl_cgrp, kn, name);
 }
 
-// fill_common populates the fields shared by every event type.
+// fill_common populates the fields shared by every event type and zeroes the
+// type-specific ones.
 static __always_inline void fill_common(struct event *e, __u8 type)
 {
 	e->type = type;
 	e->mode = 0;
+	e->dport = 0;
+	e->family = 0;
+	e->filename[0] = 0;
+	__builtin_memset(e->daddr, 0, sizeof(e->daddr));
+
 	e->timestamp_ns = bpf_ktime_get_ns();
 	e->pid = bpf_get_current_pid_tgid() >> 32;
 	e->uid = bpf_get_current_uid_gid();
@@ -151,4 +165,39 @@ SEC("tracepoint/syscalls/sys_enter_fchmodat2")
 int handle_fchmodat2(struct trace_event_raw_sys_enter *ctx)
 {
 	return emit_chmod((const char *)ctx->args[1], (__u32)ctx->args[2]);
+}
+
+// connect(sockfd, addr, addrlen): args[1] is the userspace sockaddr. Only IPv4
+// and IPv6 connections are reported.
+SEC("tracepoint/syscalls/sys_enter_connect")
+int handle_connect(struct trace_event_raw_sys_enter *ctx)
+{
+	struct sockaddr *addr = (struct sockaddr *)ctx->args[1];
+	__u16 family = 0;
+	bpf_probe_read_user(&family, sizeof(family), &addr->sa_family);
+
+	if (family != AF_INET && family != AF_INET6)
+		return 0;
+
+	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e)
+		return 0;
+
+	fill_common(e, EVENT_CONNECT);
+	e->family = family;
+
+	if (family == AF_INET) {
+		struct sockaddr_in sin = {};
+		bpf_probe_read_user(&sin, sizeof(sin), addr);
+		e->dport = bpf_ntohs(sin.sin_port);
+		__builtin_memcpy(e->daddr, &sin.sin_addr, 4);
+	} else {
+		struct sockaddr_in6 sin6 = {};
+		bpf_probe_read_user(&sin6, sizeof(sin6), addr);
+		e->dport = bpf_ntohs(sin6.sin6_port);
+		__builtin_memcpy(e->daddr, &sin6.sin6_addr, 16);
+	}
+
+	bpf_ringbuf_submit(e, 0);
+	return 0;
 }

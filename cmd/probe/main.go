@@ -58,11 +58,19 @@ func main() {
 		}
 
 		info := enrich.FromCgroup(ev.Cgroup)
-		detail := ev.Filename
-		if ev.Type == event.Chmod {
-			detail = fmt.Sprintf("%s mode=%04o", ev.Filename, ev.Mode)
-		}
 		fmt.Printf("%-6s %-24s uid=%-5d pid=%-7d comm=%-12s %s\n",
-			ev.Type, info.Source(), ev.UID, ev.PID, ev.Comm, detail)
+			ev.Type, info.Source(), ev.UID, ev.PID, ev.Comm, detail(ev))
+	}
+}
+
+// detail renders the event-specific field for display.
+func detail(ev event.Event) string {
+	switch ev.Type {
+	case event.Chmod:
+		return fmt.Sprintf("%s mode=%04o", ev.Filename, ev.Mode)
+	case event.Connect:
+		return fmt.Sprintf("%s:%d", ev.DestIP, ev.DestPort)
+	default:
+		return ev.Filename
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -15,6 +16,10 @@ import (
 	"github.com/fevzisahinler/probe/internal/cgroup"
 	"github.com/fevzisahinler/probe/internal/event"
 )
+
+// permBits masks a chmod mode down to permission and setuid/setgid/sticky bits,
+// dropping the file-type bits some callers include.
+const permBits = 0o7777
 
 // Loader attaches probe's tracepoints and reads events from the ring buffer.
 // Read must not be called concurrently.
@@ -66,6 +71,7 @@ func New(mode cgroup.Mode) (*Loader, error) {
 		{group: "syscalls", name: "sys_enter_chmod", prog: l.objs.HandleChmod, optional: true},
 		{group: "syscalls", name: "sys_enter_fchmodat", prog: l.objs.HandleFchmodat},
 		{group: "syscalls", name: "sys_enter_fchmodat2", prog: l.objs.HandleFchmodat2, optional: true},
+		{group: "syscalls", name: "sys_enter_connect", prog: l.objs.HandleConnect},
 	}
 	for _, h := range hooks {
 		lnk, err := link.Tracepoint(h.group, h.name, h.prog, nil)
@@ -108,10 +114,12 @@ func (l *Loader) Read() (event.Event, error) {
 		PID:         raw.Pid,
 		PPID:        raw.Ppid,
 		UID:         raw.Uid,
-		Mode:        raw.Mode,
+		Mode:        raw.Mode & permBits,
+		DestPort:    raw.Dport,
 		Comm:        cString(raw.Comm[:]),
 		Filename:    cString(raw.Filename[:]),
 		Cgroup:      cString(raw.Cgroup[:]),
+		DestIP:      formatIP(raw.Family, raw.Daddr[:]),
 	}, nil
 }
 
@@ -135,4 +143,19 @@ func cString(b []byte) string {
 		return string(b[:i])
 	}
 	return string(b)
+}
+
+// formatIP renders a raw address by family (AF_INET=2, AF_INET6=10).
+func formatIP(family uint16, addr []byte) string {
+	switch family {
+	case 2:
+		if len(addr) >= 4 {
+			return net.IP(addr[:4]).String()
+		}
+	case 10:
+		if len(addr) >= 16 {
+			return net.IP(addr[:16]).String()
+		}
+	}
+	return ""
 }
