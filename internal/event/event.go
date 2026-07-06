@@ -35,6 +35,24 @@ func (t Type) String() string {
 	}
 }
 
+// TypeOf maps a rule's event name to a Type, reporting whether it is known.
+func TypeOf(name string) (Type, bool) {
+	switch name {
+	case "exec":
+		return Exec, true
+	case "open":
+		return Open, true
+	case "chmod":
+		return Chmod, true
+	case "connect":
+		return Connect, true
+	case "exit":
+		return Exit, true
+	default:
+		return 0, false
+	}
+}
+
 // Event is a decoded kernel event.
 type Event struct {
 	Type        Type

@@ -1,0 +1,33 @@
+# File-access detections (open/openat/openat2).
+
+- name: sensitive_file_read
+  desc: A process accessed a sensitive system credential file
+  event: open
+  priority: high
+  mitre: T1003.008
+  match:
+    path_prefix: [/etc/shadow, /etc/sudoers, /etc/gshadow]
+
+- name: ssh_private_key_read
+  desc: A process read an SSH private key
+  event: open
+  priority: high
+  mitre: T1552.004
+  match:
+    path_contains: [/.ssh/id_]
+
+- name: cloud_credentials_read
+  desc: A process read cloud provider credentials
+  event: open
+  priority: high
+  mitre: T1552.001
+  match:
+    path_contains: [/.aws/credentials, /.config/gcloud/, /.azure/]
+
+- name: docker_socket_access
+  desc: A process accessed the Docker socket (container escape)
+  event: open
+  priority: critical
+  mitre: T1610
+  match:
+    path_prefix: [/var/run/docker.sock, /run/docker.sock]

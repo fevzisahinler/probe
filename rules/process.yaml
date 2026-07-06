@@ -1,0 +1,44 @@
+# Process-execution detections (execve).
+
+- name: shell_in_container
+  desc: A shell was spawned inside a container
+  event: exec
+  priority: critical
+  mitre: T1059.004
+  match:
+    comm_in: [sh, bash, zsh, ash, dash, ksh]
+    workload: container
+
+- name: package_manager_in_container
+  desc: A package manager ran inside a container at runtime
+  event: exec
+  priority: medium
+  mitre: T1072
+  match:
+    comm_in: [apt, apt-get, apk, yum, dnf, pip, pip3, npm, gem]
+    workload: container
+
+- name: exec_from_tmp
+  desc: A binary was executed from a temporary directory
+  event: exec
+  priority: high
+  mitre: T1059
+  match:
+    path_prefix: [/tmp/, /dev/shm/, /var/tmp/]
+
+- name: network_tool_in_container
+  desc: A reverse-shell or network tool ran inside a container
+  event: exec
+  priority: high
+  mitre: T1059
+  match:
+    comm_in: [nc, ncat, netcat, socat]
+    workload: container
+
+- name: crypto_miner_exec
+  desc: A known crypto-miner binary was executed
+  event: exec
+  priority: critical
+  mitre: T1496
+  match:
+    comm_in: [xmrig, minerd, cpuminer, cgminer]
