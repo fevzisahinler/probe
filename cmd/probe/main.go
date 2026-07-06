@@ -70,6 +70,11 @@ func detail(ev event.Event) string {
 		return fmt.Sprintf("%s mode=%04o", ev.Filename, ev.Mode)
 	case event.Connect:
 		return fmt.Sprintf("%s:%d", ev.DestIP, ev.DestPort)
+	case event.Exit:
+		if sig := ev.ExitCode & 0x7f; sig != 0 {
+			return fmt.Sprintf("killed by signal %d", sig)
+		}
+		return fmt.Sprintf("exit=%d", (ev.ExitCode>>8)&0xff)
 	default:
 		return ev.Filename
 	}

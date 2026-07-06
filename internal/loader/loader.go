@@ -65,6 +65,7 @@ func New(mode cgroup.Mode) (*Loader, error) {
 
 	hooks := []hook{
 		{group: "sched", name: "sched_process_exec", prog: l.objs.HandleExec},
+		{group: "sched", name: "sched_process_exit", prog: l.objs.HandleExit},
 		{group: "syscalls", name: "sys_enter_open", prog: l.objs.HandleOpen, optional: true},
 		{group: "syscalls", name: "sys_enter_openat", prog: l.objs.HandleOpenat},
 		{group: "syscalls", name: "sys_enter_openat2", prog: l.objs.HandleOpenat2, optional: true},
@@ -115,6 +116,7 @@ func (l *Loader) Read() (event.Event, error) {
 		PPID:        raw.Ppid,
 		UID:         raw.Uid,
 		Mode:        raw.Mode & permBits,
+		ExitCode:    raw.ExitCode,
 		DestPort:    raw.Dport,
 		Comm:        cString(raw.Comm[:]),
 		Filename:    cString(raw.Filename[:]),

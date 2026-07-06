@@ -13,6 +13,8 @@ const (
 	Chmod
 	// Connect is an outbound network connection (connect) event.
 	Connect
+	// Exit is a process-exit event.
+	Exit
 )
 
 // String returns the event type's short label.
@@ -26,6 +28,8 @@ func (t Type) String() string {
 		return "CHMOD"
 	case Connect:
 		return "CONN"
+	case Exit:
+		return "EXIT"
 	default:
 		return "UNKNOWN"
 	}
@@ -39,6 +43,7 @@ type Event struct {
 	PPID        uint32
 	UID         uint32
 	Mode        uint32 // file mode for Chmod events, else 0
+	ExitCode    uint32 // raw kernel exit code for Exit events, else 0
 	DestPort    uint16 // destination port for Connect events, else 0
 	Comm        string
 	Filename    string
