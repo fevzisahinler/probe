@@ -19,20 +19,34 @@ type probeEvent struct {
 	Pid         uint32
 	Ppid        uint32
 	Uid         uint32
+	Mode        uint32
+	ExitCode    uint32
+	Dport       uint16
+	Family      uint16
+	Type        uint8
+	Daddr       [16]uint8
 	Comm        [16]uint8
 	Filename    [256]uint8
 	Cgroup      [128]uint8
-	_           [4]byte
+	_           [7]byte
 }
 
 // Names of all BPF objects in the ELF.
 //
 // Used for safe lookups in a Collection or CollectionSpec.
 const (
-	probeMapEvents      = "events"
-	probeProgHandleExec = "handle_exec"
-	probeVarCgroupMode  = "cgroup_mode"
-	probeVarUnused      = "unused"
+	probeMapEvents           = "events"
+	probeProgHandleChmod     = "handle_chmod"
+	probeProgHandleConnect   = "handle_connect"
+	probeProgHandleExec      = "handle_exec"
+	probeProgHandleExit      = "handle_exit"
+	probeProgHandleFchmodat  = "handle_fchmodat"
+	probeProgHandleFchmodat2 = "handle_fchmodat2"
+	probeProgHandleOpen      = "handle_open"
+	probeProgHandleOpenat    = "handle_openat"
+	probeProgHandleOpenat2   = "handle_openat2"
+	probeVarCgroupMode       = "cgroup_mode"
+	probeVarUnused           = "unused"
 )
 
 // loadProbe returns the embedded CollectionSpec for probe.
@@ -77,7 +91,15 @@ type probeSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type probeProgramSpecs struct {
-	HandleExec *ebpf.ProgramSpec `ebpf:"handle_exec"`
+	HandleChmod     *ebpf.ProgramSpec `ebpf:"handle_chmod"`
+	HandleConnect   *ebpf.ProgramSpec `ebpf:"handle_connect"`
+	HandleExec      *ebpf.ProgramSpec `ebpf:"handle_exec"`
+	HandleExit      *ebpf.ProgramSpec `ebpf:"handle_exit"`
+	HandleFchmodat  *ebpf.ProgramSpec `ebpf:"handle_fchmodat"`
+	HandleFchmodat2 *ebpf.ProgramSpec `ebpf:"handle_fchmodat2"`
+	HandleOpen      *ebpf.ProgramSpec `ebpf:"handle_open"`
+	HandleOpenat    *ebpf.ProgramSpec `ebpf:"handle_openat"`
+	HandleOpenat2   *ebpf.ProgramSpec `ebpf:"handle_openat2"`
 }
 
 // probeMapSpecs contains maps before they are loaded into the kernel.
@@ -136,12 +158,28 @@ type probeVariables struct {
 //
 // It can be passed to loadProbeObjects or ebpf.CollectionSpec.LoadAndAssign.
 type probePrograms struct {
-	HandleExec *ebpf.Program `ebpf:"handle_exec"`
+	HandleChmod     *ebpf.Program `ebpf:"handle_chmod"`
+	HandleConnect   *ebpf.Program `ebpf:"handle_connect"`
+	HandleExec      *ebpf.Program `ebpf:"handle_exec"`
+	HandleExit      *ebpf.Program `ebpf:"handle_exit"`
+	HandleFchmodat  *ebpf.Program `ebpf:"handle_fchmodat"`
+	HandleFchmodat2 *ebpf.Program `ebpf:"handle_fchmodat2"`
+	HandleOpen      *ebpf.Program `ebpf:"handle_open"`
+	HandleOpenat    *ebpf.Program `ebpf:"handle_openat"`
+	HandleOpenat2   *ebpf.Program `ebpf:"handle_openat2"`
 }
 
 func (p *probePrograms) Close() error {
 	return _ProbeClose(
+		p.HandleChmod,
+		p.HandleConnect,
 		p.HandleExec,
+		p.HandleExit,
+		p.HandleFchmodat,
+		p.HandleFchmodat2,
+		p.HandleOpen,
+		p.HandleOpenat,
+		p.HandleOpenat2,
 	)
 }
 

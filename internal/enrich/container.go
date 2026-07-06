@@ -34,7 +34,7 @@ func (i Info) Source() string {
 // Container runtimes embed a 64-hex ID in the cgroup name; systemd services
 // name their cgroup <unit>.service.
 var (
-	containerIDRe = regexp.MustCompile(`[0-9a-f]{64}`)
+	containerIDRe = regexp.MustCompile(`\b[0-9a-f]{64}\b`)
 	serviceRe     = regexp.MustCompile(`[0-9A-Za-z_.@\-]+\.service`)
 )
 
