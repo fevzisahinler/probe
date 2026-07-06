@@ -26,7 +26,7 @@ type Loader struct {
 }
 
 // hook is one tracepoint attachment. Optional hooks that fail to attach (e.g.
-// sys_enter_open is absent on arm64) are skipped rather than fatal.
+// sys_enter_chmod is absent on arm64) are skipped rather than fatal.
 type hook struct {
 	group, name string
 	prog        *ebpf.Program
@@ -63,6 +63,9 @@ func New(mode cgroup.Mode) (*Loader, error) {
 		{group: "syscalls", name: "sys_enter_open", prog: l.objs.HandleOpen, optional: true},
 		{group: "syscalls", name: "sys_enter_openat", prog: l.objs.HandleOpenat},
 		{group: "syscalls", name: "sys_enter_openat2", prog: l.objs.HandleOpenat2, optional: true},
+		{group: "syscalls", name: "sys_enter_chmod", prog: l.objs.HandleChmod, optional: true},
+		{group: "syscalls", name: "sys_enter_fchmodat", prog: l.objs.HandleFchmodat},
+		{group: "syscalls", name: "sys_enter_fchmodat2", prog: l.objs.HandleFchmodat2, optional: true},
 	}
 	for _, h := range hooks {
 		lnk, err := link.Tracepoint(h.group, h.name, h.prog, nil)
@@ -105,6 +108,7 @@ func (l *Loader) Read() (event.Event, error) {
 		PID:         raw.Pid,
 		PPID:        raw.Ppid,
 		UID:         raw.Uid,
+		Mode:        raw.Mode,
 		Comm:        cString(raw.Comm[:]),
 		Filename:    cString(raw.Filename[:]),
 		Cgroup:      cString(raw.Cgroup[:]),

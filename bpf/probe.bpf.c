@@ -11,8 +11,9 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define CGROUP_MODE_V1 1
 #define CGROUP_MODE_V2 2
 
-#define EVENT_EXEC 1
-#define EVENT_OPEN 2
+#define EVENT_EXEC  1
+#define EVENT_OPEN  2
+#define EVENT_CHMOD 3
 
 // Set by userspace at load time: 1 = cgroup v1, 2 = cgroup v2.
 const volatile __u32 cgroup_mode = 0;
@@ -22,6 +23,7 @@ struct event {
 	__u32 pid;
 	__u32 ppid;
 	__u32 uid;
+	__u32 mode;
 	__u8  type;
 	__u8  comm[TASK_COMM_LEN];
 	__u8  filename[MAX_FILENAME_LEN];
@@ -56,6 +58,7 @@ static __always_inline const char *read_cgroup_name(struct task_struct *task)
 static __always_inline void fill_common(struct event *e, __u8 type)
 {
 	e->type = type;
+	e->mode = 0;
 	e->timestamp_ns = bpf_ktime_get_ns();
 	e->pid = bpf_get_current_pid_tgid() >> 32;
 	e->uid = bpf_get_current_uid_gid();
@@ -67,7 +70,6 @@ static __always_inline void fill_common(struct event *e, __u8 type)
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));
 }
 
-// emit_open submits a file-open event for a userspace path pointer.
 static __always_inline int emit_open(const char *filename)
 {
 	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
@@ -75,6 +77,20 @@ static __always_inline int emit_open(const char *filename)
 		return 0;
 
 	fill_common(e, EVENT_OPEN);
+	bpf_probe_read_user_str(&e->filename, sizeof(e->filename), filename);
+
+	bpf_ringbuf_submit(e, 0);
+	return 0;
+}
+
+static __always_inline int emit_chmod(const char *filename, __u32 mode)
+{
+	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e)
+		return 0;
+
+	fill_common(e, EVENT_CHMOD);
+	e->mode = mode;
 	bpf_probe_read_user_str(&e->filename, sizeof(e->filename), filename);
 
 	bpf_ringbuf_submit(e, 0);
@@ -98,24 +114,41 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	return 0;
 }
 
-// open(filename, flags, mode): args[0] is the path. Present on x86_64, absent on
-// arm64 (which only exposes openat).
+// open family — different libcs use different variants; hook all.
 SEC("tracepoint/syscalls/sys_enter_open")
 int handle_open(struct trace_event_raw_sys_enter *ctx)
 {
 	return emit_open((const char *)ctx->args[0]);
 }
 
-// openat(dfd, filename, flags, mode): args[1] is the path.
 SEC("tracepoint/syscalls/sys_enter_openat")
 int handle_openat(struct trace_event_raw_sys_enter *ctx)
 {
 	return emit_open((const char *)ctx->args[1]);
 }
 
-// openat2(dfd, filename, how, size): args[1] is the path.
 SEC("tracepoint/syscalls/sys_enter_openat2")
 int handle_openat2(struct trace_event_raw_sys_enter *ctx)
 {
 	return emit_open((const char *)ctx->args[1]);
+}
+
+// chmod family — chmod(path, mode); fchmodat(dfd, path, mode, flags);
+// fchmodat2(dfd, path, mode, flags). Hook all so musl and glibc are covered.
+SEC("tracepoint/syscalls/sys_enter_chmod")
+int handle_chmod(struct trace_event_raw_sys_enter *ctx)
+{
+	return emit_chmod((const char *)ctx->args[0], (__u32)ctx->args[1]);
+}
+
+SEC("tracepoint/syscalls/sys_enter_fchmodat")
+int handle_fchmodat(struct trace_event_raw_sys_enter *ctx)
+{
+	return emit_chmod((const char *)ctx->args[1], (__u32)ctx->args[2]);
+}
+
+SEC("tracepoint/syscalls/sys_enter_fchmodat2")
+int handle_fchmodat2(struct trace_event_raw_sys_enter *ctx)
+{
+	return emit_chmod((const char *)ctx->args[1], (__u32)ctx->args[2]);
 }
