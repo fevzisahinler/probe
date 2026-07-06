@@ -21,8 +21,13 @@ import (
 // dropping the file-type bits some callers include.
 const permBits = 0o7777
 
+// Address families as reported by the kernel in connect events.
+const (
+	afInet  = 2
+	afInet6 = 10
+)
+
 // Loader attaches probe's tracepoints and reads events from the ring buffer.
-// Read must not be called concurrently.
 type Loader struct {
 	objs      probeObjects
 	links     []link.Link
@@ -96,16 +101,19 @@ func New(mode cgroup.Mode) (*Loader, error) {
 	return l, nil
 }
 
-// Read blocks until the next event arrives. It returns ringbuf.ErrClosed
-// after Close.
+// Read blocks until the next event arrives and decodes it. It must not be
+// called from multiple goroutines at once; Close may be called concurrently to
+// unblock a pending Read, which then returns ringbuf.ErrClosed.
 func (l *Loader) Read() (event.Event, error) {
 	record, err := l.reader.Read()
 	if err != nil {
 		return event.Event{}, err
 	}
 
+	// The ring buffer is written by the BPF program on this host, so records
+	// are in native byte order.
 	var raw probeEvent
-	if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &raw); err != nil {
+	if err := binary.Read(bytes.NewReader(record.RawSample), binary.NativeEndian, &raw); err != nil {
 		return event.Event{}, fmt.Errorf("decode event: %w", err)
 	}
 
@@ -147,14 +155,14 @@ func cString(b []byte) string {
 	return string(b)
 }
 
-// formatIP renders a raw address by family (AF_INET=2, AF_INET6=10).
+// formatIP renders a raw address by family.
 func formatIP(family uint16, addr []byte) string {
 	switch family {
-	case 2:
+	case afInet:
 		if len(addr) >= 4 {
 			return net.IP(addr[:4]).String()
 		}
-	case 10:
+	case afInet6:
 		if len(addr) >= 16 {
 			return net.IP(addr[:16]).String()
 		}
