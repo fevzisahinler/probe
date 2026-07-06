@@ -25,6 +25,14 @@ type Loader struct {
 	closeOnce sync.Once
 }
 
+// hook is one tracepoint attachment. Optional hooks that fail to attach (e.g.
+// sys_enter_open is absent on arm64) are skipped rather than fatal.
+type hook struct {
+	group, name string
+	prog        *ebpf.Program
+	optional    bool
+}
+
 // New loads the eBPF objects for the given cgroup mode, attaches every
 // tracepoint, and opens the ring buffer. The caller must Close the result.
 func New(mode cgroup.Mode) (*Loader, error) {
@@ -50,16 +58,18 @@ func New(mode cgroup.Mode) (*Loader, error) {
 		return nil, fmt.Errorf("load bpf objects: %w", err)
 	}
 
-	hooks := []struct {
-		group, name string
-		prog        *ebpf.Program
-	}{
-		{"sched", "sched_process_exec", l.objs.HandleExec},
-		{"syscalls", "sys_enter_openat", l.objs.HandleOpenat},
+	hooks := []hook{
+		{group: "sched", name: "sched_process_exec", prog: l.objs.HandleExec},
+		{group: "syscalls", name: "sys_enter_open", prog: l.objs.HandleOpen, optional: true},
+		{group: "syscalls", name: "sys_enter_openat", prog: l.objs.HandleOpenat},
+		{group: "syscalls", name: "sys_enter_openat2", prog: l.objs.HandleOpenat2, optional: true},
 	}
 	for _, h := range hooks {
 		lnk, err := link.Tracepoint(h.group, h.name, h.prog, nil)
 		if err != nil {
+			if h.optional {
+				continue
+			}
 			_ = l.Close()
 			return nil, fmt.Errorf("attach %s/%s: %w", h.group, h.name, err)
 		}

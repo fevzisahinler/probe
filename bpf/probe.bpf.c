@@ -67,6 +67,20 @@ static __always_inline void fill_common(struct event *e, __u8 type)
 	bpf_get_current_comm(&e->comm, sizeof(e->comm));
 }
 
+// emit_open submits a file-open event for a userspace path pointer.
+static __always_inline int emit_open(const char *filename)
+{
+	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
+	if (!e)
+		return 0;
+
+	fill_common(e, EVENT_OPEN);
+	bpf_probe_read_user_str(&e->filename, sizeof(e->filename), filename);
+
+	bpf_ringbuf_submit(e, 0);
+	return 0;
+}
+
 SEC("tracepoint/sched/sched_process_exec")
 int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 {
@@ -84,19 +98,24 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	return 0;
 }
 
+// open(filename, flags, mode): args[0] is the path. Present on x86_64, absent on
+// arm64 (which only exposes openat).
+SEC("tracepoint/syscalls/sys_enter_open")
+int handle_open(struct trace_event_raw_sys_enter *ctx)
+{
+	return emit_open((const char *)ctx->args[0]);
+}
+
+// openat(dfd, filename, flags, mode): args[1] is the path.
 SEC("tracepoint/syscalls/sys_enter_openat")
 int handle_openat(struct trace_event_raw_sys_enter *ctx)
 {
-	struct event *e = bpf_ringbuf_reserve(&events, sizeof(*e), 0);
-	if (!e)
-		return 0;
+	return emit_open((const char *)ctx->args[1]);
+}
 
-	fill_common(e, EVENT_OPEN);
-
-	// openat(dfd, filename, flags, mode): args[1] is the userspace path.
-	const char *filename = (const char *)ctx->args[1];
-	bpf_probe_read_user_str(&e->filename, sizeof(e->filename), filename);
-
-	bpf_ringbuf_submit(e, 0);
-	return 0;
+// openat2(dfd, filename, how, size): args[1] is the path.
+SEC("tracepoint/syscalls/sys_enter_openat2")
+int handle_openat2(struct trace_event_raw_sys_enter *ctx)
+{
+	return emit_open((const char *)ctx->args[1]);
 }
