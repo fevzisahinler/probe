@@ -54,6 +54,11 @@ const rulesDoc = `
   priority: medium
   match:
     dest_port: [5432]
+- name: docker_sock
+  event: connect
+  priority: critical
+  match:
+    path_exact: [/var/run/docker.sock]
 `
 
 func names(ds []Detection) []string {
@@ -94,6 +99,7 @@ func TestEngineEval(t *testing.T) {
 		{"metadata ip", event.Event{Type: event.Connect, DestIP: "169.254.169.254"}, enrich.Info{}, []string{"metadata_connect"}},
 		{"db port", event.Event{Type: event.Connect, DestPort: 5432}, enrich.Info{}, []string{"db_connect"}},
 		{"other connect no match", event.Event{Type: event.Connect, DestIP: "8.8.8.8", DestPort: 53}, enrich.Info{}, nil},
+		{"unix docker sock", event.Event{Type: event.Connect, Filename: "/var/run/docker.sock"}, enrich.Info{}, []string{"docker_sock"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

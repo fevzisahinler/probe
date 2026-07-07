@@ -15,3 +15,11 @@
   mitre: T1059
   match:
     comm_in: [sh, bash, zsh, ash, dash, ksh]
+
+- name: docker_socket_access
+  desc: A process connected to the Docker socket (container escape)
+  event: connect
+  priority: critical
+  mitre: T1610
+  match:
+    path_exact: [/var/run/docker.sock, /run/docker.sock]

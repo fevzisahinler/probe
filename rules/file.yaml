@@ -27,14 +27,6 @@
     access: read
     path_contains: [/.aws/credentials, /.config/gcloud/, /.azure/]
 
-- name: docker_socket_access
-  desc: A process accessed the Docker socket (container escape)
-  event: open
-  priority: critical
-  mitre: T1610
-  match:
-    path_exact: [/var/run/docker.sock, /run/docker.sock]
-
 - name: write_to_bindir
   desc: A process wrote to a system binary directory
   event: open
