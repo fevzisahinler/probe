@@ -21,14 +21,17 @@ type probeEvent struct {
 	Uid         uint32
 	Mode        uint32
 	ExitCode    uint32
+	Flags       uint32
 	Dport       uint16
 	Family      uint16
+	ArgsLen     uint16
 	Type        uint8
 	Daddr       [16]uint8
 	Comm        [16]uint8
 	Filename    [256]uint8
 	Cgroup      [128]uint8
-	_           [7]byte
+	Args        [128]uint8
+	_           [1]byte
 }
 
 // Names of all BPF objects in the ELF.
