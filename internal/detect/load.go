@@ -95,6 +95,10 @@ func compile(r *Rule) error {
 		return fmt.Errorf("rule %q: access is only valid for open events", r.Name)
 	}
 
+	if len(r.Match.ArgsContains) > 0 && t != event.Exec {
+		return fmt.Errorf("rule %q: args_contains is only valid for exec events", r.Name)
+	}
+
 	for _, c := range r.Match.CommIn {
 		if len(c) > maxCommLen {
 			return fmt.Errorf("rule %q: comm_in %q exceeds the %d-byte kernel limit", r.Name, c, maxCommLen)

@@ -42,3 +42,12 @@
   mitre: T1496
   match:
     comm_in: [xmrig, minerd, cpuminer, cgminer]
+
+- name: reverse_shell_command
+  desc: A shell command opened a raw TCP/UDP device (reverse shell)
+  event: exec
+  priority: critical
+  mitre: T1059
+  match:
+    comm_in: [sh, bash, zsh, ash, dash, ksh]
+    args_contains: [/dev/tcp/, /dev/udp/]

@@ -55,6 +55,7 @@ type Condition struct {
 	ModeSetuid   bool     `yaml:"mode_setuid"`
 	DestIP       []string `yaml:"dest_ip"`
 	DestPort     []uint16 `yaml:"dest_port"`
+	ArgsContains []string `yaml:"args_contains"`
 }
 
 func (c Condition) matches(ev event.Event, info enrich.Info) bool {
@@ -99,6 +100,9 @@ func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 	if len(c.DestPort) > 0 && !slices.Contains(c.DestPort, ev.DestPort) {
 		return false
 	}
+	if len(c.ArgsContains) > 0 && !hasAnySubstr(ev.Args, c.ArgsContains) {
+		return false
+	}
 	return true
 }
 
@@ -108,7 +112,7 @@ func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 func (c Condition) empty() bool {
 	return len(c.CommIn) == 0 && c.Workload == WorkloadAny &&
 		len(c.PathExact) == 0 && len(c.PathPrefix) == 0 && len(c.PathContains) == 0 &&
-		!c.ModeSetuid && len(c.DestIP) == 0 && len(c.DestPort) == 0
+		!c.ModeSetuid && len(c.DestIP) == 0 && len(c.DestPort) == 0 && len(c.ArgsContains) == 0
 }
 
 // Rule is a single detection loaded from YAML.

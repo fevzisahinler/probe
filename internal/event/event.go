@@ -70,6 +70,7 @@ type Event struct {
 	Comm        string
 	Filename    string
 	Cgroup      string
+	Args        string // process arguments for Exec events, else ""
 	DestIP      string // destination IP for Connect events, else ""
 }
 
