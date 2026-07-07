@@ -6,7 +6,7 @@
   priority: high
   mitre: T1003.008
   match:
-    path_prefix: [/etc/shadow, /etc/sudoers, /etc/gshadow]
+    path_exact: [/etc/shadow, /etc/sudoers, /etc/gshadow]
 
 - name: ssh_private_key_read
   desc: A process read an SSH private key
@@ -30,4 +30,4 @@
   priority: critical
   mitre: T1610
   match:
-    path_prefix: [/var/run/docker.sock, /run/docker.sock]
+    path_exact: [/var/run/docker.sock, /run/docker.sock]

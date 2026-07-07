@@ -31,19 +31,20 @@ const (
 	WorkloadHost      Workload = "host"
 )
 
+// setuidBits are the setuid and setgid mode bits.
+const setuidBits = 0o6000
+
 // Condition is a rule's match criteria. Every non-empty field must hold (AND).
 type Condition struct {
 	CommIn       []string `yaml:"comm_in"`
 	Workload     Workload `yaml:"workload"`
+	PathExact    []string `yaml:"path_exact"`
 	PathPrefix   []string `yaml:"path_prefix"`
 	PathContains []string `yaml:"path_contains"`
 	ModeSetuid   bool     `yaml:"mode_setuid"`
 	DestIP       []string `yaml:"dest_ip"`
 	DestPort     []uint16 `yaml:"dest_port"`
 }
-
-// setuidBits are the setuid and setgid mode bits.
-const setuidBits = 0o6000
 
 func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 	if len(c.CommIn) > 0 && !slices.Contains(c.CommIn, ev.Comm) {
@@ -58,6 +59,9 @@ func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 		if info.InContainer() {
 			return false
 		}
+	}
+	if len(c.PathExact) > 0 && !slices.Contains(c.PathExact, ev.Filename) {
+		return false
 	}
 	if len(c.PathPrefix) > 0 && !hasAnyPrefix(ev.Filename, c.PathPrefix) {
 		return false
@@ -75,6 +79,14 @@ func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 		return false
 	}
 	return true
+}
+
+// empty reports whether the condition has no criteria, which would make the
+// rule fire on every event of its type.
+func (c Condition) empty() bool {
+	return len(c.CommIn) == 0 && c.Workload == WorkloadAny &&
+		len(c.PathExact) == 0 && len(c.PathPrefix) == 0 && len(c.PathContains) == 0 &&
+		!c.ModeSetuid && len(c.DestIP) == 0 && len(c.DestPort) == 0
 }
 
 // Rule is a single detection loaded from YAML.

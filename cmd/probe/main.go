@@ -32,7 +32,7 @@ func main() {
 	dir := rulesDir()
 	loaded, err := detect.LoadDir(dir)
 	if err != nil {
-		log.Fatalf("load rules from %s: %v", dir, err)
+		log.Fatalf("load rules: %v", err)
 	}
 	if len(loaded) == 0 {
 		log.Fatalf("no rules found in %s", dir)
