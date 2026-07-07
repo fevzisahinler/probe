@@ -29,6 +29,7 @@ struct event {
 	__u32 uid;
 	__u32 mode;
 	__u32 exit_code;
+	__u32 flags;
 	__u16 dport;
 	__u16 family;
 	__u8  type;
@@ -69,6 +70,7 @@ static __always_inline void fill_common(struct event *e, __u8 type)
 	e->type = type;
 	e->mode = 0;
 	e->exit_code = 0;
+	e->flags = 0;
 	e->dport = 0;
 	e->family = 0;
 	e->filename[0] = 0;

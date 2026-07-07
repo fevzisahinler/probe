@@ -125,6 +125,7 @@ func (l *Loader) Read() (event.Event, error) {
 		UID:         raw.Uid,
 		Mode:        raw.Mode & permBits,
 		ExitCode:    raw.ExitCode,
+		Flags:       raw.Flags,
 		DestPort:    raw.Dport,
 		Comm:        cString(raw.Comm[:]),
 		Filename:    cString(raw.Filename[:]),

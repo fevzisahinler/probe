@@ -26,7 +26,14 @@ const rulesDoc = `
   event: open
   priority: high
   match:
+    access: read
     path_exact: [/etc/shadow]
+- name: bindir_write
+  event: open
+  priority: high
+  match:
+    access: write
+    path_prefix: [/usr/bin/]
 - name: ssh_key_read
   event: open
   priority: high
@@ -64,6 +71,8 @@ func TestEngineEval(t *testing.T) {
 	}
 	eng := NewEngine(loaded)
 
+	const write = 1 // O_WRONLY
+
 	tests := []struct {
 		name string
 		ev   event.Event
@@ -74,8 +83,11 @@ func TestEngineEval(t *testing.T) {
 		{"shell on host no match", event.Event{Type: event.Exec, Comm: "sh"}, enrich.Info{}, nil},
 		{"host zsh", event.Event{Type: event.Exec, Comm: "zsh"}, enrich.Info{}, []string{"host_shell"}},
 		{"zsh in container not host_shell", event.Event{Type: event.Exec, Comm: "zsh"}, enrich.Info{ContainerID: "abc"}, nil},
-		{"shadow exact match", event.Event{Type: event.Open, Filename: "/etc/shadow"}, enrich.Info{}, []string{"shadow_read"}},
+		{"shadow read", event.Event{Type: event.Open, Filename: "/etc/shadow"}, enrich.Info{}, []string{"shadow_read"}},
+		{"shadow write not read rule", event.Event{Type: event.Open, Filename: "/etc/shadow", Flags: write}, enrich.Info{}, nil},
 		{"shadow backup not matched", event.Event{Type: event.Open, Filename: "/etc/shadow.bak"}, enrich.Info{}, nil},
+		{"bindir read not write rule", event.Event{Type: event.Open, Filename: "/usr/bin/x"}, enrich.Info{}, nil},
+		{"bindir write", event.Event{Type: event.Open, Filename: "/usr/bin/x", Flags: write}, enrich.Info{}, []string{"bindir_write"}},
 		{"ssh key substring", event.Event{Type: event.Open, Filename: "/home/u/.ssh/id_rsa"}, enrich.Info{}, []string{"ssh_key_read"}},
 		{"setuid chmod", event.Event{Type: event.Chmod, Mode: 0o4755}, enrich.Info{}, []string{"setuid_set"}},
 		{"plain chmod no match", event.Event{Type: event.Chmod, Mode: 0o0644}, enrich.Info{}, nil},
@@ -99,6 +111,8 @@ func TestLoadValidation(t *testing.T) {
 		"invalid priority": "- name: r\n  event: exec\n  priority: urgent\n  match:\n    comm_in: [sh]\n",
 		"missing priority": "- name: r\n  event: exec\n  match:\n    comm_in: [sh]\n",
 		"invalid workload": "- name: r\n  event: exec\n  priority: low\n  match:\n    workload: contaner\n    comm_in: [sh]\n",
+		"invalid access":   "- name: r\n  event: open\n  priority: low\n  match:\n    access: sideways\n    path_exact: [/x]\n",
+		"access on exec":   "- name: r\n  event: exec\n  priority: low\n  match:\n    access: read\n    comm_in: [sh]\n",
 		"empty match":      "- name: r\n  event: exec\n  priority: low\n",
 		"long comm":        "- name: r\n  event: exec\n  priority: low\n  match:\n    comm_in: [this_process_name_is_far_too_long]\n",
 		"missing name":     "- event: exec\n  priority: low\n  match:\n    comm_in: [sh]\n",
