@@ -15,6 +15,17 @@ int handle_exec(struct trace_event_raw_sched_process_exec *ctx)
 	unsigned int off = ctx->__data_loc_filename & 0xFFFF;
 	bpf_probe_read_kernel_str(&e->filename, sizeof(e->filename), (char *)ctx + off);
 
+	// argv is stored NUL-separated between mm->arg_start and mm->arg_end.
+	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
+	__u64 arg_start = BPF_CORE_READ(task, mm, arg_start);
+	__u64 arg_end = BPF_CORE_READ(task, mm, arg_end);
+	__u64 len = arg_end - arg_start;
+	if (len > sizeof(e->args))
+		len = sizeof(e->args);
+	e->args_len = len;
+	if (bpf_probe_read_user(&e->args, sizeof(e->args), (const void *)arg_start) != 0)
+		e->args_len = 0;
+
 	bpf_ringbuf_submit(e, 0);
 	return 0;
 }

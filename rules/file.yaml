@@ -1,11 +1,12 @@
 # File-access detections (open/openat/openat2).
 
 - name: sensitive_file_read
-  desc: A process accessed a sensitive system credential file
+  desc: A process read a sensitive system credential file
   event: open
   priority: high
   mitre: T1003.008
   match:
+    access: read
     path_exact: [/etc/shadow, /etc/sudoers, /etc/gshadow]
 
 - name: ssh_private_key_read
@@ -14,6 +15,7 @@
   priority: high
   mitre: T1552.004
   match:
+    access: read
     path_contains: [/.ssh/id_]
 
 - name: cloud_credentials_read
@@ -22,12 +24,32 @@
   priority: high
   mitre: T1552.001
   match:
+    access: read
     path_contains: [/.aws/credentials, /.config/gcloud/, /.azure/]
 
-- name: docker_socket_access
-  desc: A process accessed the Docker socket (container escape)
+- name: write_to_bindir
+  desc: A process wrote to a system binary directory
+  event: open
+  priority: high
+  mitre: T1543
+  match:
+    access: write
+    path_prefix: [/usr/bin/, /bin/, /usr/local/bin/, /usr/sbin/, /sbin/]
+
+- name: credential_file_write
+  desc: A process modified a system credential file
   event: open
   priority: critical
-  mitre: T1610
+  mitre: T1098
   match:
-    path_exact: [/var/run/docker.sock, /run/docker.sock]
+    access: write
+    path_exact: [/etc/passwd, /etc/shadow, /etc/sudoers]
+
+- name: authorized_keys_write
+  desc: A process wrote to an SSH authorized_keys file (persistence)
+  event: open
+  priority: high
+  mitre: T1098.004
+  match:
+    access: write
+    path_contains: [/.ssh/authorized_keys]

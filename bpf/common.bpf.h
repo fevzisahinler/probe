@@ -9,6 +9,7 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 #define TASK_COMM_LEN 16
 #define MAX_FILENAME_LEN 256
 #define CGROUP_NAME_LEN 128
+#define ARGS_LEN 128
 
 #define CGROUP_MODE_V1 1
 #define CGROUP_MODE_V2 2
@@ -29,13 +30,16 @@ struct event {
 	__u32 uid;
 	__u32 mode;
 	__u32 exit_code;
+	__u32 flags;
 	__u16 dport;
 	__u16 family;
+	__u16 args_len;
 	__u8  type;
 	__u8  daddr[16];
 	__u8  comm[TASK_COMM_LEN];
 	__u8  filename[MAX_FILENAME_LEN];
 	__u8  cgroup[CGROUP_NAME_LEN];
+	__u8  args[ARGS_LEN];
 };
 
 // Kept in BTF so bpf2go can generate the matching Go type.
@@ -69,6 +73,8 @@ static __always_inline void fill_common(struct event *e, __u8 type)
 	e->type = type;
 	e->mode = 0;
 	e->exit_code = 0;
+	e->flags = 0;
+	e->args_len = 0;
 	e->dport = 0;
 	e->family = 0;
 	e->filename[0] = 0;

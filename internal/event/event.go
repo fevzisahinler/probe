@@ -53,6 +53,9 @@ func TypeOf(name string) (Type, bool) {
 	}
 }
 
+// accMode masks the access-mode bits (O_ACCMODE) of open flags.
+const accMode = 0o3
+
 // Event is a decoded kernel event.
 type Event struct {
 	Type        Type
@@ -62,9 +65,17 @@ type Event struct {
 	UID         uint32
 	Mode        uint32 // file mode for Chmod events, else 0
 	ExitCode    uint32 // raw kernel exit code for Exit events, else 0
+	Flags       uint32 // open flags for Open events, else 0
 	DestPort    uint16 // destination port for Connect events, else 0
 	Comm        string
 	Filename    string
 	Cgroup      string
+	Args        string // process arguments for Exec events, else ""
 	DestIP      string // destination IP for Connect events, else ""
+}
+
+// IsWrite reports whether an Open event opened the file for writing
+// (O_WRONLY or O_RDWR).
+func (e Event) IsWrite() bool {
+	return e.Flags&accMode != 0
 }

@@ -95,7 +95,10 @@ func detail(ev event.Event) string {
 	case event.Chmod:
 		return fmt.Sprintf("%s mode=%04o", ev.Filename, ev.Mode)
 	case event.Connect:
-		return fmt.Sprintf("%s:%d", ev.DestIP, ev.DestPort)
+		if ev.DestIP != "" {
+			return fmt.Sprintf("%s:%d", ev.DestIP, ev.DestPort)
+		}
+		return ev.Filename
 	case event.Exit:
 		if sig := ev.ExitCode & 0x7f; sig != 0 {
 			return fmt.Sprintf("killed by signal %d", sig)

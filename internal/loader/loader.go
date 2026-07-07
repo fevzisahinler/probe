@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/cilium/ebpf"
@@ -125,10 +126,12 @@ func (l *Loader) Read() (event.Event, error) {
 		UID:         raw.Uid,
 		Mode:        raw.Mode & permBits,
 		ExitCode:    raw.ExitCode,
+		Flags:       raw.Flags,
 		DestPort:    raw.Dport,
 		Comm:        cString(raw.Comm[:]),
 		Filename:    cString(raw.Filename[:]),
 		Cgroup:      cString(raw.Cgroup[:]),
+		Args:        argString(raw.Args[:], raw.ArgsLen),
 		DestIP:      formatIP(raw.Family, raw.Daddr[:]),
 	}, nil
 }
@@ -153,6 +156,23 @@ func cString(b []byte) string {
 		return string(b[:i])
 	}
 	return string(b)
+}
+
+// argString renders the NUL-separated argv region (its first n bytes) as a
+// space-separated string.
+func argString(b []byte, n uint16) string {
+	if int(n) < len(b) {
+		b = b[:n]
+	}
+	s := make([]byte, len(b))
+	for i, c := range b {
+		if c == 0 {
+			s[i] = ' '
+		} else {
+			s[i] = c
+		}
+	}
+	return strings.TrimSpace(string(s))
 }
 
 // formatIP renders a raw address by family.

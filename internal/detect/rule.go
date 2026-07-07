@@ -31,6 +31,16 @@ const (
 	WorkloadHost      Workload = "host"
 )
 
+// Access constrains an open rule to reads or writes.
+type Access string
+
+// Access values an open Condition can require.
+const (
+	AccessAny   Access = ""
+	AccessRead  Access = "read"
+	AccessWrite Access = "write"
+)
+
 // setuidBits are the setuid and setgid mode bits.
 const setuidBits = 0o6000
 
@@ -38,12 +48,14 @@ const setuidBits = 0o6000
 type Condition struct {
 	CommIn       []string `yaml:"comm_in"`
 	Workload     Workload `yaml:"workload"`
+	Access       Access   `yaml:"access"`
 	PathExact    []string `yaml:"path_exact"`
 	PathPrefix   []string `yaml:"path_prefix"`
 	PathContains []string `yaml:"path_contains"`
 	ModeSetuid   bool     `yaml:"mode_setuid"`
 	DestIP       []string `yaml:"dest_ip"`
 	DestPort     []uint16 `yaml:"dest_port"`
+	ArgsContains []string `yaml:"args_contains"`
 }
 
 func (c Condition) matches(ev event.Event, info enrich.Info) bool {
@@ -57,6 +69,16 @@ func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 		}
 	case WorkloadHost:
 		if info.InContainer() {
+			return false
+		}
+	}
+	switch c.Access {
+	case AccessRead:
+		if ev.IsWrite() {
+			return false
+		}
+	case AccessWrite:
+		if !ev.IsWrite() {
 			return false
 		}
 	}
@@ -78,15 +100,19 @@ func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 	if len(c.DestPort) > 0 && !slices.Contains(c.DestPort, ev.DestPort) {
 		return false
 	}
+	if len(c.ArgsContains) > 0 && !hasAnySubstr(ev.Args, c.ArgsContains) {
+		return false
+	}
 	return true
 }
 
 // empty reports whether the condition has no criteria, which would make the
-// rule fire on every event of its type.
+// rule fire on every event of its type. Access alone is not enough — it would
+// still match every read (or every write), so it is not counted here.
 func (c Condition) empty() bool {
 	return len(c.CommIn) == 0 && c.Workload == WorkloadAny &&
 		len(c.PathExact) == 0 && len(c.PathPrefix) == 0 && len(c.PathContains) == 0 &&
-		!c.ModeSetuid && len(c.DestIP) == 0 && len(c.DestPort) == 0
+		!c.ModeSetuid && len(c.DestIP) == 0 && len(c.DestPort) == 0 && len(c.ArgsContains) == 0
 }
 
 // Rule is a single detection loaded from YAML.
