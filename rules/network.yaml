@@ -23,3 +23,11 @@
   mitre: T1610
   match:
     path_exact: [/var/run/docker.sock, /run/docker.sock]
+
+- name: high_risk_port_connect
+  desc: A process connected to a port commonly used by C2 or backdoors
+  event: connect
+  priority: high
+  mitre: T1571
+  match:
+    dest_port: [4444, 5555, 1337, 31337]

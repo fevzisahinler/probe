@@ -51,3 +51,30 @@
   match:
     comm_in: [sh, bash, zsh, ash, dash, ksh]
     args_contains: [/dev/tcp/, /dev/udp/]
+
+- name: download_pipe_shell
+  desc: A shell command piped a download straight into another shell
+  event: exec
+  priority: critical
+  mitre: T1105
+  match:
+    comm_in: [sh, bash, zsh, ash, dash, ksh]
+    args_contains: ["| sh", "|sh", "| bash", "|bash"]
+
+- name: encoded_command_exec
+  desc: A shell command decoded and executed an encoded payload
+  event: exec
+  priority: high
+  mitre: T1027
+  match:
+    comm_in: [sh, bash, zsh, ash, dash, ksh]
+    args_contains: ["base64 -d", "base64 --decode"]
+
+- name: recon_in_container
+  desc: A reconnaissance tool ran inside a container
+  event: exec
+  priority: low
+  mitre: T1082
+  match:
+    comm_in: [nmap, netstat, ss, ifconfig, arp, whoami]
+    workload: container
