@@ -1,0 +1,9 @@
+# Permission-change detections (chmod/fchmodat).
+
+- name: setuid_bit_set
+  desc: A setuid or setgid bit was set on a file (privilege escalation)
+  event: chmod
+  priority: high
+  mitre: T1548.001
+  match:
+    mode_setuid: true

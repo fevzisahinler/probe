@@ -19,3 +19,15 @@ func TestTypeString(t *testing.T) {
 		}
 	}
 }
+
+func TestTypeOf(t *testing.T) {
+	known := map[string]Type{"exec": Exec, "open": Open, "chmod": Chmod, "connect": Connect, "exit": Exit}
+	for name, want := range known {
+		if got, ok := TypeOf(name); !ok || got != want {
+			t.Errorf("TypeOf(%q) = %v, %v; want %v, true", name, got, ok, want)
+		}
+	}
+	if _, ok := TypeOf("nope"); ok {
+		t.Error("TypeOf(\"nope\") should report unknown")
+	}
+}

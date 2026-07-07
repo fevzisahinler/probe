@@ -1,0 +1,17 @@
+# Network detections (connect).
+
+- name: cloud_metadata_access
+  desc: A process connected to the cloud instance metadata service
+  event: connect
+  priority: critical
+  mitre: T1552.005
+  match:
+    dest_ip: [169.254.169.254]
+
+- name: shell_outbound_connection
+  desc: A shell process opened an outbound network connection
+  event: connect
+  priority: high
+  mitre: T1059
+  match:
+    comm_in: [sh, bash, zsh, ash, dash, ksh]

@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 
 	"github.com/fevzisahinler/probe/internal/cgroup"
+	"github.com/fevzisahinler/probe/internal/detect"
 	"github.com/fevzisahinler/probe/internal/enrich"
 	"github.com/fevzisahinler/probe/internal/event"
 	"github.com/fevzisahinler/probe/internal/loader"
@@ -21,8 +22,22 @@ import (
 // version is set at build time via -ldflags "-X main.version=<tag>".
 var version = "dev"
 
+// defaultRulesDir is where probe reads detection rules from unless the
+// PROBE_RULES_DIR environment variable overrides it.
+const defaultRulesDir = "/etc/probe/rules.d"
+
 func main() {
 	log.SetFlags(log.Ltime)
+
+	dir := rulesDir()
+	loaded, err := detect.LoadDir(dir)
+	if err != nil {
+		log.Fatalf("load rules: %v", err)
+	}
+	if len(loaded) == 0 {
+		log.Fatalf("no rules found in %s", dir)
+	}
+	engine := detect.NewEngine(loaded)
 
 	mode, err := cgroup.Detect()
 	if err != nil {
@@ -36,7 +51,7 @@ func main() {
 	}
 	defer func() { _ = l.Close() }()
 
-	log.Printf("probe %s — cgroup %s, streaming events", version, mode)
+	log.Printf("probe %s — cgroup %s, %d rules (%s), watching", version, mode, engine.Len(), dir)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -59,9 +74,19 @@ func main() {
 		}
 
 		info := enrich.FromCgroup(ev.Cgroup)
-		fmt.Printf("%-6s %-24s uid=%-5d pid=%-7d comm=%-12s %s\n",
-			ev.Type, info.Source(), ev.UID, ev.PID, ev.Comm, detail(ev))
+		for _, d := range engine.Eval(ev, info) {
+			fmt.Printf("[%-8s] %-28s %-24s pid=%-7d comm=%-12s %s  %s\n",
+				d.Rule.Priority, d.Rule.Name, info.Source(), ev.PID, ev.Comm, detail(ev), d.Rule.MITRE)
+		}
 	}
+}
+
+// rulesDir returns PROBE_RULES_DIR when set, otherwise the default location.
+func rulesDir() string {
+	if d := os.Getenv("PROBE_RULES_DIR"); d != "" {
+		return d
+	}
+	return defaultRulesDir
 }
 
 // detail renders the event-specific field for display.
