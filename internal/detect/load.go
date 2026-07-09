@@ -43,20 +43,29 @@ func LoadDir(dir string) ([]Rule, error) {
 func LoadFS(fsys fs.FS) ([]Rule, error) {
 	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read rules directory: %w", err)
 	}
 	var all []Rule
+	// definedIn maps a rule name to the file that first defined it, so a
+	// duplicate name across files is rejected rather than silently shadowed.
+	definedIn := make(map[string]string)
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
 			continue
 		}
 		data, err := fs.ReadFile(fsys, e.Name())
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read %s: %w", e.Name(), err)
 		}
 		rules, err := Load(data)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", e.Name(), err)
+		}
+		for _, r := range rules {
+			if first, dup := definedIn[r.Name]; dup {
+				return nil, fmt.Errorf("duplicate rule name %q in %s (already defined in %s)", r.Name, e.Name(), first)
+			}
+			definedIn[r.Name] = e.Name()
 		}
 		all = append(all, rules...)
 	}

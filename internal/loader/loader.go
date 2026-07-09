@@ -164,15 +164,16 @@ func argString(b []byte, n uint16) string {
 	if int(n) < len(b) {
 		b = b[:n]
 	}
-	s := make([]byte, len(b))
-	for i, c := range b {
+	var sb strings.Builder
+	sb.Grow(len(b))
+	for _, c := range b {
 		if c == 0 {
-			s[i] = ' '
+			sb.WriteByte(' ')
 		} else {
-			s[i] = c
+			sb.WriteByte(c)
 		}
 	}
-	return strings.TrimSpace(string(s))
+	return strings.TrimSpace(sb.String())
 }
 
 // formatIP renders a raw address by family.

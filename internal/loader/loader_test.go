@@ -50,3 +50,36 @@ func TestFormatIP(t *testing.T) {
 		})
 	}
 }
+
+func TestArgString(t *testing.T) {
+	// buf mimics the kernel's fixed 128-byte argv capture: s is copied in and
+	// the unused tail is left as NUL.
+	buf := func(s string) []byte {
+		b := make([]byte, 128)
+		copy(b, s)
+		return b
+	}
+
+	tests := []struct {
+		name string
+		b    []byte
+		n    uint16
+		want string
+	}{
+		{"single arg", buf("bash\x00"), 5, "bash"},
+		{"multiple args, real space preserved", buf("bash\x00-c\x00ls -la\x00"), 15, "bash -c ls -la"},
+		{"n zero yields empty", buf("ignored\x00"), 0, ""},
+		{"all nul yields empty", buf(""), 8, ""},
+		{"no trailing nul within n", buf("bash\x00-i"), 7, "bash -i"},
+		{"n larger than buffer is capped to len", []byte("bash\x00-i\x00"), 999, "bash -i"},
+		{"pipe payload preserved", buf("sh\x00-c\x00curl x | sh\x00"), 20, "sh -c curl x | sh"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := argString(tt.b, tt.n); got != tt.want {
+				t.Errorf("argString(_, %d) = %q, want %q", tt.n, got, tt.want)
+			}
+		})
+	}
+}
