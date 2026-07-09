@@ -53,8 +53,13 @@ func TypeOf(name string) (Type, bool) {
 	}
 }
 
-// accMode masks the access-mode bits (O_ACCMODE) of open flags.
-const accMode = 0o3
+// Open access-mode bits. O_RDONLY is 0, so a mode permits writing unless it is
+// exactly O_RDONLY, and permits reading unless it is exactly O_WRONLY. O_RDWR
+// (2) therefore counts as both a read and a write.
+const (
+	accMode = 0o3 // O_ACCMODE, masks the access-mode bits of open flags
+	oWrOnly = 0o1 // O_WRONLY
+)
 
 // Event is a decoded kernel event.
 type Event struct {
@@ -74,8 +79,15 @@ type Event struct {
 	DestIP      string // destination IP for Connect events, else ""
 }
 
-// IsWrite reports whether an Open event opened the file for writing
-// (O_WRONLY or O_RDWR).
+// IsWrite reports whether an Open event opened the file with write access
+// (O_WRONLY or O_RDWR). O_RDONLY is the only mode that denies writing.
 func (e Event) IsWrite() bool {
 	return e.Flags&accMode != 0
+}
+
+// IsRead reports whether an Open event opened the file with read access
+// (O_RDONLY or O_RDWR). O_WRONLY is the only mode that denies reading, so an
+// O_RDWR open — which can still read the file — is correctly counted as a read.
+func (e Event) IsRead() bool {
+	return e.Flags&accMode != oWrOnly
 }

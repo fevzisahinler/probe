@@ -74,7 +74,7 @@ func (c Condition) matches(ev event.Event, info enrich.Info) bool {
 	}
 	switch c.Access {
 	case AccessRead:
-		if ev.IsWrite() {
+		if !ev.IsRead() {
 			return false
 		}
 	case AccessWrite:

